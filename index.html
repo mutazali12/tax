@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>حجز تاكسي - د. معتز مدثر علي</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* CSS أساسي لملء الشاشة والتخطيط */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden; /* لمنع التمرير وتثبيت الخريطة */
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            direction: rtl; /* لدعم اللغة العربية */
+        }
+
+        #map-iframe {
+            width: 100%;
+            height: 100%;
+            border: none; /* إزالة الحدود الافتراضية للـ iframe */
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1; /* لجعل الخريطة في الخلفية */
+        }
+
+        .overlay-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2; /* لجعل العناصر فوق الخريطة */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            /* pointer-events: none; /* للسماح بالتفاعل مع الخريطة أسفل العناصر (غير عملي مع iframe) */
+        }
+
+        .top-bar, .bottom-bar {
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            /* pointer-events: all; /* إعادة تفعيل التفاعل للعناصر بداخلها */
+        }
+
+        .top-bar {
+            border-bottom-left-radius: 15px;
+            border-bottom-right-radius: 15px;
+        }
+
+        .bottom-bar {
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
+            flex-direction: column;
+            gap: 10px;
+            padding-bottom: env(safe-area-inset-bottom); /* لدعم شاشات النوتش */
+        }
+
+        .menu-icon, .profile-icon, .action-button {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #333;
+        }
+        .action-button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 25px;
+            border-radius: 30px;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            width: 90%;
+            max-width: 400px;
+        }
+        .action-button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .search-input-container {
+            width: 90%;
+            max-width: 400px;
+            position: relative;
+        }
+        .search-input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            font-size: 16px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            padding-left: 40px; /* لمكان أيقونة البحث في RTL */
+            text-align: right;
+        }
+        .search-icon {
+            position: absolute;
+            left: 15px; /* لتحديد مكان الأيقونة في RTL */
+            top: 50%;
+            transform: translateY(-50%);
+            color: #aaa;
+        }
+
+        /* قائمة جانبية (Sidebar) */
+        .sidebar {
+            height: 100%;
+            width: 0; /* مخفية افتراضياً */
+            position: fixed;
+            z-index: 3;
+            top: 0;
+            left: 0; /* ستنزلق من اليسار */
+            background-color: #fff;
+            overflow-x: hidden;
+            transition: 0.5s;
+            padding-top: 60px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1); /* الظل من اليمين */
+        }
+        .sidebar.open {
+            width: 250px; /* عرض القائمة عند فتحها */
+        }
+        .sidebar a {
+            padding: 15px 25px;
+            text-decoration: none;
+            font-size: 18px;
+            color: #333;
+            display: block;
+            transition: 0.3s;
+            text-align: right; /* محاذاة النص لليمين */
+        }
+        .sidebar a:hover {
+            background-color: #f1f1f1;
+        }
+        .sidebar .close-btn {
+            position: absolute;
+            top: 0;
+            left: 25px; /* مكان زر الإغلاق في RTL */
+            font-size: 36px;
+            margin-right: 50px;
+            text-decoration: none;
+            color: #888;
+            cursor: pointer;
+        }
+
+        .map-controls {
+            position: absolute;
+            bottom: 120px; /* فوق شريط القاع */
+            left: 20px; /* لتكون الأزرار على اليسار في RTL */
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .map-control-button {
+            background-color: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            cursor: pointer;
+            font-size: 22px;
+            color: #555;
+            transition: background-color 0.3s ease;
+        }
+        .map-control-button:hover {
+            background-color: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+
+    <iframe id="map-iframe" src="https://www.google.com/maps/embed/v1/place?q=place_id:ChIJN1t_tDeuEmsAXlK_tXn1q_M&key=YOUR_EMBED_API_KEY" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+
+    <div class="overlay-container">
+        <div class="top-bar">
+            <button class="menu-icon" id="openMenu"><i class="fas fa-bars"></i></button>
+            <h1>حجز تاكسي</h1>
+            <button class="profile-icon"><i class="fas fa-user-circle"></i></button>
+        </div>
+
+        <div class="map-controls">
+            <button class="map-control-button" id="myLocationBtn" title="موقعي الحالي">
+                <i class="fas fa-location-crosshairs"></i>
+            </button>
+            </div>
+
+        <div class="bottom-bar">
+            <div class="search-input-container">
+                <input type="text" id="searchInput" class="search-input" placeholder="أين تريد الذهاب؟">
+                <i class="fas fa-search search-icon"></i>
+            </div>
+            <button class="action-button" id="bookTaxiBtn">اطلب تاكسي الآن</button>
+        </div>
+    </div>
+
+    <div id="mySidebar" class="sidebar">
+        <a href="javascript:void(0)" class="close-btn" id="closeMenu">×</a>
+        <a href="#"><i class="fas fa-home"></i> الرئيسية</a>
+        <a href="#"><i class="fas fa-history"></i> رحلاتي</a>
+        <a href="#"><i class="fas fa-wallet"></i> المحفظة</a>
+        <a href="#"><i class="fas fa-cog"></i> الإعدادات</a>
+        <a href="#"><i class="fas fa-question-circle"></i> المساعدة</a>
+        <a href="#"><i class="fas fa-sign-out-alt"></i> تسجيل الخروج</a>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
